@@ -833,7 +833,8 @@ class Application:
         self.PAISES = [f"{i+1}. {country}" for i, country in enumerate(self.countries)]
 
         log_action("Application initialized")
-        self.show_company_name_screen()
+        # CHANGE 1: Start with the welcome screen instead of company name screen
+        self.show_start_screen()
 
     def clear_frame(self):
         for widget in self.root.winfo_children():
@@ -852,7 +853,25 @@ class Application:
         except ValueError:
             return False
 
+    def show_start_screen(self):
+        self.clear_frame()
+        frame = tk.Frame(self.root, bg="#f1e7d4")
+        frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        label = ttk.Label(frame, text="Bem-vindo à ferramenta de orçamento de marcas")
+        label.pack(pady=40)
+
+        # CHANGE 1: "COMEÇAR" now leads to company name input
+        start_button = ttk.Button(frame, text="COMEÇAR", command=self.show_company_name_screen)
+        start_button.pack(pady=20)
+
+        exit_button = ttk.Button(frame, text="SAIR", command=self.root.quit)
+        exit_button.pack(pady=10)
+        log_action("Start screen displayed")
+
     def show_company_name_screen(self):
+        # CHANGE 1: Navigation stack updated to reflect new flow (back to start screen)
+        self.navigation_stack.append(self.show_start_screen)
         self.clear_frame()
         frame = tk.Frame(self.root, bg="#f1e7d4")
         frame.place(relx=0.5, rely=0.5, anchor="center")
@@ -862,37 +881,25 @@ class Application:
 
         self.company_entry = ttk.Entry(frame, width=50)
         self.company_entry.pack(pady=10)
+        # CHANGE 2: Bind Enter key to save_company_name
+        self.company_entry.bind('<Return>', lambda event: self.save_company_name())
 
         next_button = ttk.Button(frame, text="Avançar", command=self.save_company_name)
         next_button.pack(pady=20)
+
+        self.add_back_button(self.navigation_stack[-1])
 
     def save_company_name(self):
         company_name = self.company_entry.get().strip()
         if company_name:
             self.company_name = escape_latex(company_name)
             log_action(f"Company name entered: {self.company_name}")
-            self.show_start_screen()
+            self.show_multiple_brands_question()
         else:
             messagebox.showerror("Erro", "Por favor, insira o nome da empresa.")
 
-    def show_start_screen(self):
-        self.navigation_stack.append(self.show_company_name_screen)
-        self.clear_frame()
-        frame = tk.Frame(self.root, bg="#f1e7d4")
-        frame.place(relx=0.5, rely=0.5, anchor="center")
-
-        label = ttk.Label(frame, text="Bem-vindo à ferramenta de orçamento de marcas")
-        label.pack(pady=40)
-
-        start_button = ttk.Button(frame, text="COMEÇAR", command=self.show_multiple_brands_question)
-        start_button.pack(pady=20)
-
-        exit_button = ttk.Button(frame, text="SAIR", command=self.root.quit)
-        exit_button.pack(pady=10)
-        log_action("Start screen displayed")
-
     def show_multiple_brands_question(self):
-        self.navigation_stack.append(self.show_start_screen)
+        self.navigation_stack.append(self.show_company_name_screen)
         self.clear_frame()
 
         label = ttk.Label(self.root, text="Deseja Orçar Múltiplas Marcas?")
@@ -938,11 +945,13 @@ class Application:
         self.navigation_stack.append(self.show_same_country_question if self.current_marca.get("multiplas_marcas") == "Sim" else self.show_multiple_brands_question)
         self.clear_frame()
 
-        label = ttk.Label(self.root, text="Países Disponíveis (Digite o nome ou número, ou selecione na lista)")
+        label = ttk.Label(self.root, text="Países Disponíveis (Digite ou selecione e pressione Enter)")
         label.place(relx=0.5, rely=0.05, anchor="center")
 
         self.country_entry = ttk.Entry(self.root, width=50)
         self.country_entry.place(relx=0.5, rely=0.1, anchor="center")
+        # Bind Enter key to save_country for entry field
+        self.country_entry.bind('<Return>', lambda event: self.save_country())
 
         list_frame = tk.Frame(self.root, bg="#f1e7d4")
         list_frame.place(relx=0.5, rely=0.55, anchor="center", width=600, height=300)
@@ -958,12 +967,15 @@ class Application:
 
         scrollbar.config(command=self.country_listbox.yview)
         self.country_listbox.bind('<<ListboxSelect>>', self.on_country_select)
+        # Bind Enter key to save_country for listbox
+        self.country_listbox.bind('<Return>', lambda event: self.save_country())
 
         next_button = ttk.Button(self.root, text="Avançar", command=self.save_country)
         next_button.place(relx=0.5, rely=0.9, anchor="center")
 
         self.add_back_button(self.navigation_stack[-1])
         log_action("Country selection screen displayed")
+
 
     def on_country_select(self, event):
         selection = self.country_listbox.curselection()
@@ -973,15 +985,30 @@ class Application:
 
     def save_country(self):
         country_input = self.country_entry.get().strip()
+        # Handle number input (e.g., "1")
         if country_input.isdigit() and 1 <= int(country_input) <= len(self.countries):
             self.selected_country = self.countries[int(country_input) - 1]
+        # Handle name input (e.g., "Brasil")
         elif any(normalize_string(country_input) == normalize_string(country) for country in self.countries):
             self.selected_country = next((country for country in self.countries if normalize_string(country_input) == normalize_string(country)), None)
             if self.selected_country is None:
-                messagebox.showerror("Erro", "País inválido. Digite o número ou o nome do país.")
+                messagebox.showerror("Erro", "País inválido. Digite o número, nome do país ou 'número. Nome' (ex: '1. Brasil').")
+                return
+        # Handle "number. Name" input (e.g., "2. AFRICA DO SUL")
+        elif re.match(r'^\d+\.\s[A-Za-z\s]+$', country_input):
+            try:
+                number, name = country_input.split('. ', 1)
+                number = int(number)
+                if 1 <= number <= len(self.countries) and normalize_string(name) == normalize_string(self.countries[number - 1]):
+                    self.selected_country = self.countries[number - 1]
+                else:
+                    messagebox.showerror("Erro", "País inválido. Digite o número, nome do país ou 'número. Nome' (ex: '1. Brasil').")
+                    return
+            except (ValueError, IndexError):
+                messagebox.showerror("Erro", "País inválido. Digite o número, nome do país ou 'número. Nome' (ex: '1. Brasil').")
                 return
         else:
-            messagebox.showerror("Erro", "País inválido. Digite o número ou o nome do país.")
+            messagebox.showerror("Erro", "País inválido. Digite o número, nome do país ou 'número. Nome' (ex: '1. Brasil').")
             return
         self.current_marca["selected_country"] = self.selected_country
         log_action(f"Country selected: {self.selected_country}")
@@ -991,11 +1018,13 @@ class Application:
         self.navigation_stack.append(self.show_country_selection)
         self.clear_frame()
 
-        label = ttk.Label(self.root, text="Correspondentes Disponíveis (Digite o nome ou número)")
+        label = ttk.Label(self.root, text="Correspondentes Disponíveis (Digite ou selecione e pressione Enter)")
         label.place(relx=0.5, rely=0.05, anchor="center")
 
         self.correspondent_entry = ttk.Entry(self.root, width=50)
         self.correspondent_entry.place(relx=0.5, rely=0.1, anchor="center")
+        # Bind Enter key to save_correspondent for entry field
+        self.correspondent_entry.bind('<Return>', lambda event: self.save_correspondent())
 
         correspondents = sorted(sheet_df[sheet_df['Pais_de_Atuacao'] == self.selected_country]['Nome_do_Correspondente'].dropna().unique())
         self.correspondents = [f"{i+1}. {corr}" for i, corr in enumerate(correspondents)]
@@ -1014,6 +1043,8 @@ class Application:
 
         scrollbar.config(command=self.correspondent_listbox.yview)
         self.correspondent_listbox.bind('<<ListboxSelect>>', self.on_correspondent_select)
+        # Bind Enter key to save_correspondent for listbox
+        self.correspondent_listbox.bind('<Return>', lambda event: self.save_correspondent())
 
         next_button = ttk.Button(self.root, text="Avançar", command=self.save_correspondent)
         next_button.place(relx=0.5, rely=0.9, anchor="center")
@@ -1030,15 +1061,30 @@ class Application:
     def save_correspondent(self):
         corr_input = self.correspondent_entry.get().strip()
         correspondents = sorted(sheet_df[sheet_df['Pais_de_Atuacao'] == self.selected_country]['Nome_do_Correspondente'].dropna().unique())
+        # Handle number input (e.g., "1")
         if corr_input.isdigit() and 1 <= int(corr_input) <= len(correspondents):
             self.selected_correspondent = correspondents[int(corr_input) - 1]
+        # Handle name input (e.g., "John Doe")
         elif any(normalize_string(corr_input) == normalize_string(corr) for corr in correspondents):
             self.selected_correspondent = next((corr for corr in correspondents if normalize_string(corr_input) == normalize_string(corr)), None)
             if self.selected_correspondent is None:
-                messagebox.showerror("Erro", "Correspondente inválido. Digite o número ou o nome do correspondente.")
+                messagebox.showerror("Erro", "Correspondente inválido. Digite o número, nome do correspondente ou 'número. Nome' (ex: '1. John Doe').")
+                return
+        # Handle "number. Name" input (e.g., "1. John Doe" or "1. José Silva")
+        elif re.match(r'^\d+\.\s[\w\sÀ-ÿ\'-]+$', corr_input):
+            try:
+                number, name = corr_input.split('. ', 1)
+                number = int(number)
+                if 1 <= number <= len(correspondents) and normalize_string(name) == normalize_string(correspondents[number - 1]):
+                    self.selected_correspondent = correspondents[number - 1]
+                else:
+                    messagebox.showerror("Erro", "Correspondente inválido. Verifique se o número e o nome correspondem à lista (ex: '1. John Doe').")
+                    return
+            except (ValueError, IndexError):
+                messagebox.showerror("Erro", "Formato inválido. Use 'número. Nome' com um espaço após o ponto (ex: '1. John Doe').")
                 return
         else:
-            messagebox.showerror("Erro", "Correspondente inválido. Digite o número ou o nome do correspondente.")
+            messagebox.showerror("Erro", "Correspondente inválido. Digite o número, nome do correspondente ou 'número. Nome' (ex: '1. John Doe').")
             return
         self.current_marca["selected_correspondent"] = self.selected_correspondent
         log_action(f"Correspondent selected: {self.selected_correspondent}")
@@ -1056,6 +1102,8 @@ class Application:
 
         self.trademark_entry = ttk.Entry(self.root, width=50)
         self.trademark_entry.place(relx=0.5, rely=0.4, anchor="center")
+        # CHANGE 2: Bind Enter key to save_trademark_name
+        self.trademark_entry.bind('<Return>', lambda event: self.save_trademark_name())
 
         next_button = ttk.Button(self.root, text="Avançar", command=self.save_trademark_name)
         next_button.place(relx=0.5, rely=0.5, anchor="center")
@@ -1133,6 +1181,8 @@ class Application:
 
         self.classes_entry = ttk.Entry(self.root, width=20, validate="key", validatecommand=self.validate_positive_int)
         self.classes_entry.place(relx=0.5, rely=0.4, anchor="center")
+        # CHANGE 2: Bind Enter key to save_class_count
+        self.classes_entry.bind('<Return>', lambda event: self.save_class_count())
 
         next_button = ttk.Button(self.root, text="Avançar", command=self.save_class_count)
         next_button.place(relx=0.5, rely=0.5, anchor="center")
@@ -1317,15 +1367,14 @@ class Application:
                             errors.append(f"Falha ao gerar PDF: {output_name}")
                     except subprocess.CalledProcessError as e:
                         log_action(f"Error compiling LaTeX for {output_name}: {e.stderr[:200]}...")
-                        errors.append(f"Erro ao compilar PDF {output_name}: {e.stderr[:200]}...")
+                        errors.append(f"Erro processing PDF {output_name}: {e}")
                     except Exception as e:
                         log_action(f"Unexpected error during LaTeX compilation for {output_name}: {e}")
                         errors.append(f"Erro inesperado ao compilar PDF {output_name}: {e}")
 
-                        
             else:
                 log_action("XeLaTeX not found, skipping PDF compilation")
-                errors.append("XeLaTeX não encontrado. PDFs não foram gerados.")
+                errors.append("XeLaTeX not found. PDFs não foram gerados.")
 
             if errors:
                 messagebox.showerror("Erro", "\n".join(errors))
@@ -1344,14 +1393,15 @@ class Application:
         frame = tk.Frame(self.root, bg="#f1e7d4")
         frame.place(relx=0.5, rely=0.5, anchor="center")
         if error:
-            label = ttk.Label(frame, text="Erro ao gerar orçamento. Verifique o log para detalhes.")
+            label = ttk.Label(frame, text="Erro ao gerar o orçamento. Verifique o log para detalhes.")
         else:
             label = ttk.Label(frame, text=f"Orçamento Gerado com Sucesso! Arquivos salvos em: {logs_dir}")
         label.pack(pady=20)
         new_budget_button = ttk.Button(frame, text="Novo Orçamento", command=self.reset_application)
         new_budget_button.pack(pady=10)
-        quit_button = ttk.Button(frame, text="Quit", command=self.root.quit)
-        quit_button.pack(pady=10)
+        exit_button = ttk.Button(frame, text="SAIR", command=self.root.quit)
+        exit_button.pack(pady=10)
+        label.pack(pady=10)
         log_action(f"Completion screen displayed, error: {error}")
 
     def reset_application(self):
@@ -1366,7 +1416,8 @@ class Application:
         self.global_country = None
         self.global_correspondent = None
         log_action("Application reset for new budget")
-        self.show_company_name_screen()
+        # CHANGE 1: Reset to start screen for new budget
+        self.show_start_screen()
 
 # Main application start
 if __name__ == "__main__":
