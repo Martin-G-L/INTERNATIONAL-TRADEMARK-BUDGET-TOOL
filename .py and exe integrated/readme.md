@@ -1,6 +1,7 @@
 # 🛠 Trademark Budget Tool – Python Version
 
 This folder contains the **standalone Python (`.py`) version** of the **Trademark Budget Tool** developed by M-G-L International.
+It's a extension with adapted path to the colab version contained in the Repository. See Colab Inicial Version README.md for more details.
 
 ## 📌 Description
 
