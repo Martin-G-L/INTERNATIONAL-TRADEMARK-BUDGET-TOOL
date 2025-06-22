@@ -19,6 +19,8 @@ output_dir = os.path.join(BASE_PATH, "OUTPUT")
 os.makedirs(output_dir, exist_ok=True)
 logs_dir = os.path.join(output_dir, "LOGS")
 os.makedirs(logs_dir, exist_ok=True)
+pdf_output_dir = output_dir  # PDFs will be saved in OUTPUT folder
+os.makedirs(pdf_output_dir, exist_ok=True)
 
 FILE_PATH = os.path.join(BASE_PATH, "PLANILHAS", "SCHEDULE OF FEES.xlsx")
 DOCX_TEMPLATE_PATH = os.path.join(BASE_PATH, "PLANILHAS", "Word_Template_Deposito_1_Classe.docx")
@@ -1306,9 +1308,10 @@ class Application:
                         log_action(f"LaTeX compilation output: {result.stdout[:200]}...")
                         if result.stderr:
                             log_action(f"LaTeX compilation warnings/errors: {result.stderr[:200]}...")
-                        pdf_path = os.path.join(logs_dir, output_name)
-                        if os.path.exists(pdf_path):
-                            log_action(f"PDF generated: {pdf_path}")
+                        pdf_path = os.path.join(pdf_output_dir, output_name)
+                        if os.path.exists(os.path.join(logs_dir, output_name)):
+                            shutil.move(os.path.join(logs_dir, output_name), pdf_path)
+                            log_action(f"PDF moved to: {pdf_path}")
                         else:
                             log_action(f"Failed to generate PDF: {output_name}")
                             errors.append(f"Falha ao gerar PDF: {output_name}")
@@ -1318,6 +1321,8 @@ class Application:
                     except Exception as e:
                         log_action(f"Unexpected error during LaTeX compilation for {output_name}: {e}")
                         errors.append(f"Erro inesperado ao compilar PDF {output_name}: {e}")
+
+                        
             else:
                 log_action("XeLaTeX not found, skipping PDF compilation")
                 errors.append("XeLaTeX não encontrado. PDFs não foram gerados.")
