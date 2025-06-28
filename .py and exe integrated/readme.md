@@ -47,3 +47,7 @@ C:\Users\Your Username\Documents\PROGRAM TESTING FOLDERS\exes\Project Schedule o
 C:\Users\Your Username\Documents\PROGRAM TESTING FOLDERS\exes\Project Schedule of Fees\CODE\Logo
 → **Logo image directory**
 
+4. **.EXE version**:
+   - 25 mb upload in the platform prevented the full .exe File Upload. If you desire it you may:
+     i) Contact me to receive it directly.
+     ii) Compiled it with pyinstaller selecting all required templates and files through --add-data
